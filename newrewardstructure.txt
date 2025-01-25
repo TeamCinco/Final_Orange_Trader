@@ -1,0 +1,146 @@
+class TradingRewardCalculator:
+    def __init__(self, initial_balance):
+        self.initial_balance = initial_balance
+        self.balance = initial_balance
+        self.previous_balance = initial_balance
+        self.weekly_balance = 0
+        self.monthly_balance = 0
+        self.yearly_balance = 0
+        self.streaks = 0
+        self.drawdown = 0
+        self.losses = 0
+        self.profit = 0
+        self.risk_to_reward = 0
+        self.row_counter = 0  # Keeps track of the row progression
+        self.weekly_start_balance = initial_balance
+        self.monthly_start_balance = initial_balance
+        self.yearly_start_balance = initial_balance
+
+    def calculate_reward(self, trade_result, current_balance, risk_to_reward, streaks, high_risk_setup, drawdown):
+        reward = 0
+        self.row_counter += 1  # Increment row counter with each trade
+
+        # **Immediate Outcomes (Profit/Loss Based)**
+        if trade_result >= 0.02 * current_balance:
+            reward += 1  # Win trade >= 2%
+        elif trade_result <= -0.02 * current_balance:
+            reward -= 1  # Lose trade >= 2%
+
+        # **Risk-to-Reward Ratio**
+        if risk_to_reward > 2:
+            reward += 2  # Good trade setup
+        elif risk_to_reward < 1:
+            reward -= 2  # Poor trade setup
+
+        # **Streaks (Momentum)**
+        if streaks == 2:
+            reward += 3  # Win 2 trades in a row
+        elif streaks >= 3:
+            reward += 5  # Win 3+ trades in a row
+        elif streaks <= -3:
+            reward -= 3  # Loss streak
+
+        # **High-Risk Setup**
+        if high_risk_setup:
+            if risk_to_reward > 2:
+                reward += 3  # High-risk trade win
+            else:
+                reward -= 2  # High-risk trade loss
+
+        # **Weekly Performance (Every 120 Rows)**
+        if self.row_counter % 120 == 0:
+            weekly_balance = current_balance - self.weekly_start_balance
+            if weekly_balance > 0:
+                reward += 5  # Positive weekly balance
+            elif weekly_balance < 0:
+                reward -= 3  # Negative weekly balance
+
+            if drawdown > 0.10:
+                reward -= 5  # Weekly drawdown > 10%
+            elif drawdown < 0.05:
+                reward += 3  # Low weekly drawdown (< 5%)
+
+            # Reset weekly tracking
+            self.weekly_start_balance = current_balance
+
+        # **Monthly Performance (Every 480 Rows)**
+        if self.row_counter % 480 == 0:
+            monthly_balance = current_balance - self.monthly_start_balance
+            if monthly_balance > 5:
+                reward += 10  # Monthly growth > $5
+            elif monthly_balance < -5:
+                reward -= 5  # Monthly drop > $5
+            elif monthly_balance < 0:
+                reward += 2  # Monthly loss < $5
+
+            # Reset monthly tracking
+            self.monthly_start_balance = current_balance
+
+        # **Yearly Performance (Every 5760 Rows)**
+        if self.row_counter % 5760 == 0:
+            yearly_balance = current_balance - self.yearly_start_balance
+            if yearly_balance > 20:
+                reward += 30  # Yearly growth > $20
+            elif yearly_balance < -10:
+                reward -= 10  # Yearly drop > $10
+
+            # Reset yearly tracking
+            self.yearly_start_balance = current_balance
+
+        # **Risk Management (Drawdowns)**
+        if drawdown > 0.10:
+            reward -= 10  # Exceed 10% drawdown
+        elif drawdown > 0.50:
+            reward -= 50  # Exceed 50% drawdown (game over)
+
+        if drawdown >= 0.20 and current_balance > self.previous_balance * 1.10:
+            reward += 20  # Recover 10% after 20% drawdown
+        elif drawdown < 0.20:
+            reward += 3  # Recovery from drawdown
+
+        # **Balance Management (Losses)**  
+        if current_balance < self.previous_balance - 10:
+            reward -= 5  # Lose $10
+        elif current_balance < self.previous_balance - 20:
+            reward -= 10  # Lose $20
+
+        return reward
+
+    # **Helper Methods to Update Balances and Metrics**
+    def update_balance(self, new_balance):
+        self.previous_balance = self.balance
+        self.balance = new_balance
+
+    def set_risk_to_reward(self, risk_to_reward):
+        self.risk_to_reward = risk_to_reward
+
+    def set_streaks(self, streaks):
+        self.streaks = streaks
+
+    def set_drawdown(self, drawdown):
+        self.drawdown = drawdown
+
+
+# **Example Usage**
+# Initialize the trading reward calculator with an initial balance of $1000
+reward_calculator = TradingRewardCalculator(initial_balance=1000)
+
+# Simulate a CSV game loop (rows being processed)
+for row in range(1, 130):  # Simulating 130 rows (slightly more than a week)
+    trade_result = 0.03  # Example: 3% profit on the trade
+    reward_calculator.update_balance(1100 + row * 2)  # Increment balance for testing
+    reward_calculator.set_risk_to_reward(2.5)  # Example: consistent good trades
+    reward_calculator.set_streaks(2)  # Example streak
+    reward_calculator.set_drawdown(0.08)  # Example drawdown (8%)
+
+    # Calculate reward for each row
+    reward = reward_calculator.calculate_reward(
+        trade_result=trade_result,
+        current_balance=reward_calculator.balance,
+        risk_to_reward=reward_calculator.risk_to_reward,
+        streaks=reward_calculator.streaks,
+        high_risk_setup=True,  # Example: the trade was a high-risk setup
+        drawdown=reward_calculator.drawdown
+    )
+
+    print(f"Row {row}: Reward = {reward}")
